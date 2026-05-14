@@ -1,5 +1,11 @@
 # CrewAI Ollama Cloud Provider
 
+[![CI](https://github.com/Hackbard/crewai-ollama-cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/Hackbard/crewai-ollama-cloud/actions)
+[![Ruff](https://img.shields.io/badge/ruff-clean-brightgreen)](https://github.com/astral-sh/ruff)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
+[![CrewAI](https://img.shields.io/badge/crewai-1.14.4-orange)](https://crewai.com)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
 A custom [CrewAI](https://crewai.com) LLM provider that speaks **native Ollama protocol** —
 `POST /api/chat` with NDJSON streaming. No OpenAI shim, no LiteLLM, no proxy needed.
 Works with local Ollama, self-hosted instances, and [ollama.com](https://ollama.com) Cloud API.

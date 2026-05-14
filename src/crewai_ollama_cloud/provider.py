@@ -30,13 +30,12 @@ import os
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
-from pydantic import BaseModel, PrivateAttr, Field, model_validator
-
 from crewai.events.types.llm_events import LLMCallType
 from crewai.llms.base_llm import BaseLLM, llm_call_context
 from crewai.utilities.exceptions.context_window_exceeding_exception import (
     LLMContextLengthExceededError,
 )
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 if TYPE_CHECKING:
     from crewai.agents.agent_builder.base_agent import BaseAgent

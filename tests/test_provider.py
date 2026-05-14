@@ -7,13 +7,12 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-
-from crewai_ollama_cloud import OllamaCloudProvider
-from crewai_ollama_cloud.discovery import list_ollama_models
 from crewai.utilities.exceptions.context_window_exceeding_exception import (
     LLMContextLengthExceededError,
 )
 
+from crewai_ollama_cloud import OllamaCloudProvider
+from crewai_ollama_cloud.discovery import list_ollama_models
 
 # ── provider initialization tests ──────────────────────────────────────
 

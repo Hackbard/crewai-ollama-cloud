@@ -223,7 +223,7 @@ class OllamaCloudProvider(BaseLLM):
         from_task: Task | None,
         from_agent: BaseAgent | None,
         response_model: type[BaseModel] | None,
-    ) -> str:
+    ) -> str | Any:
         body = self._build_body(messages, tools, response_model)
         body["stream"] = True
 
@@ -296,22 +296,28 @@ class OllamaCloudProvider(BaseLLM):
                         }
 
                         # Handle tool calls from final chunk
-                        if msg.get("tool_calls") and available_functions:
-                            tool_call = msg["tool_calls"][0]
-                            fn_name = tool_call["function"]["name"]
-                            fn_args = tool_call["function"]["arguments"]
-                            if isinstance(fn_args, str):
-                                fn_args = json.loads(fn_args)
-                            result = self._handle_tool_execution(
-                                function_name=fn_name,
-                                function_args=fn_args,
-                                available_functions=available_functions,
-                                from_task=from_task,
-                                from_agent=from_agent,
-                            )
+                        if msg.get("tool_calls"):
+                            if available_functions:
+                                tool_call = msg["tool_calls"][0]
+                                fn_name = tool_call["function"]["name"]
+                                fn_args = tool_call["function"]["arguments"]
+                                if isinstance(fn_args, str):
+                                    fn_args = json.loads(fn_args)
+                                result = self._handle_tool_execution(
+                                    function_name=fn_name,
+                                    function_args=fn_args,
+                                    available_functions=available_functions,
+                                    from_task=from_task,
+                                    from_agent=from_agent,
+                                )
+                                if usage:
+                                    self._track_token_usage_internal(usage)
+                                return result if result is not None else ""
+                            # No available_functions: surface the raw tool calls
+                            # so the caller (CrewAI native executor) can run them.
                             if usage:
                                 self._track_token_usage_internal(usage)
-                            return result if result is not None else ""
+                            return msg["tool_calls"]
 
         except httpx.HTTPStatusError as e:
             if _is_context_overflow_msg(str(e)) and full_text:
@@ -357,19 +363,24 @@ class OllamaCloudProvider(BaseLLM):
         msg = data.get("message", {})
         tool_calls = msg.get("tool_calls")
 
-        if tool_calls and available_functions:
-            tool_call = tool_calls[0]
-            fn_name = tool_call["function"]["name"]
-            fn_args = tool_call["function"]["arguments"]
-            if isinstance(fn_args, str):
-                fn_args = json.loads(fn_args)
-            return self._handle_tool_execution(
-                function_name=fn_name,
-                function_args=fn_args,
-                available_functions=available_functions,
-                from_task=from_task,
-                from_agent=from_agent,
-            )
+        if tool_calls:
+            if available_functions:
+                tool_call = tool_calls[0]
+                fn_name = tool_call["function"]["name"]
+                fn_args = tool_call["function"]["arguments"]
+                if isinstance(fn_args, str):
+                    fn_args = json.loads(fn_args)
+                return self._handle_tool_execution(
+                    function_name=fn_name,
+                    function_args=fn_args,
+                    available_functions=available_functions,
+                    from_task=from_task,
+                    from_agent=from_agent,
+                )
+            # No available_functions: surface the raw tool calls so the caller
+            # (e.g. CrewAI's native-tools executor) can execute them itself.
+            # Without this, tool-call responses (empty content) collapse to "".
+            return tool_calls
 
         text = msg.get("content", "") or ""
         text = self._apply_stop_words(text)

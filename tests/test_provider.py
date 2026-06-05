@@ -253,6 +253,33 @@ class TestNonStreamingCall:
             )
             assert result == "Sunny in Berlin"
 
+    def test_tool_call_non_streaming_returns_calls_without_available_functions(self):
+        # When CrewAI's native-tools executor calls without available_functions,
+        # the provider must SURFACE the tool calls (not collapse to empty content).
+        provider = OllamaCloudProvider(model="llama3.1:8b", stream=False)
+
+        tool_calls = [
+            {
+                "id": "call_abc",
+                "function": {"name": "get_weather", "arguments": {"city": "Berlin"}},
+            }
+        ]
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "model": "llama3.1:8b",
+            "message": {"role": "assistant", "content": "", "tool_calls": tool_calls},
+            "done": True,
+            "prompt_eval_count": 20,
+            "eval_count": 8,
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(provider._client, "post", return_value=mock_response):
+            result = provider.call("What's the weather?")
+            assert result == tool_calls
+            assert isinstance(result, list)
+            assert result[0]["function"]["name"] == "get_weather"
+
     def test_stop_words_applied(self):
         provider = OllamaCloudProvider(model="llama3:8b", stop=["END"], stream=False)
 
@@ -376,6 +403,29 @@ class TestStreamingCall:
                 "calc 2", available_functions={"calc": calc_fn},
             )
             assert result == "4"
+
+    def test_streaming_tool_call_returns_calls_without_available_functions(self):
+        provider = OllamaCloudProvider(model="llama3.1:8b", stream=True)
+
+        tool_calls = [{"function": {"name": "calc", "arguments": {"x": 2}}}]
+        raw_lines = [
+            json.dumps({
+                "model": "llama3.1:8b", "done": True,
+                "message": {"role": "assistant", "content": "", "tool_calls": tool_calls},
+                "prompt_eval_count": 10, "eval_count": 5,
+            }),
+        ]
+
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=None)
+        mock_stream.iter_lines.return_value = raw_lines
+        mock_stream.raise_for_status = MagicMock()
+
+        with patch.object(provider._client, "stream", return_value=mock_stream):
+            result = provider.call("calc 2")
+            assert result == tool_calls
+            assert result[0]["function"]["name"] == "calc"
 
 
 # ── discovery tests ────────────────────────────────────────────────────

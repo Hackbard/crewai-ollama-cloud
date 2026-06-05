@@ -428,6 +428,53 @@ class TestStreamingCall:
             assert result[0]["function"]["name"] == "calc"
 
 
+# ── tool / message normalization tests ─────────────────────────────────
+
+class TestToolNormalization:
+
+    def test_convert_passes_through_openai_format(self):
+        # CrewAI's native executor passes OpenAI-formatted tool dicts; Ollama's
+        # tool format is OpenAI-compatible, so they must be forwarded unchanged
+        # (not iterated with .items(), which would yield "type"/"function").
+        from crewai_ollama_cloud.provider import _convert_tools_ollama
+
+        openai_tools = [{
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read a file",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+        }]
+        out = _convert_tools_ollama(openai_tools)
+        assert out == openai_tools
+        assert out[0]["function"]["name"] == "read_file"
+
+    def test_normalize_messages_dictifies_tool_call_args(self):
+        # OpenAI sends arguments as a JSON string + null content; Ollama needs
+        # an object and non-null content, else /api/chat returns HTTP 400.
+        from crewai_ollama_cloud.provider import _normalize_ollama_messages
+
+        msgs = [{
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": '{"path": "/x"}'},
+            }],
+        }]
+        out = _normalize_ollama_messages(msgs)
+        assert out[0]["content"] == ""
+        tc = out[0]["tool_calls"][0]
+        assert tc["function"]["arguments"] == {"path": "/x"}
+        assert "id" not in tc and "type" not in tc
+
+
 # ── discovery tests ────────────────────────────────────────────────────
 
 class TestModelDiscovery:

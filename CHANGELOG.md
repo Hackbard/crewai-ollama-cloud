@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.1] — 2026-06-05
+
+### Fixed
+- **Completes native tool calling with CrewAI's native-tools executor.** Two
+  further incompatibilities surfaced during end-to-end agent runs:
+  - `_convert_tools_ollama` assumed CrewAI's `{tool_name: BaseTool}` mapping and
+    iterated `.items()` on OpenAI-formatted tool dicts the native executor passes
+    — producing bogus tools literally named `type`/`function`, so the model
+    emitted unusable tool calls ("Tool not found"). OpenAI-format tool dicts are
+    now forwarded unchanged (Ollama's tool format is OpenAI-compatible).
+  - `_normalize_ollama_messages` re-sent assistant `tool_calls` with `arguments`
+    as a JSON *string* and `content: null`, which Ollama's `/api/chat` rejects
+    with HTTP 400 ("Value looks like object…"). Arguments are now parsed to
+    objects and null content is coerced to `""`.
+- Together with 0.2.0, a full multi-turn native tool loop now works end-to-end.
+
 ## [0.2.0] — 2026-06-05
 
 ### Fixed

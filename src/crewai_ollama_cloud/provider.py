@@ -486,25 +486,58 @@ class OllamaCloudProvider(BaseLLM):
 
 # ── helpers ─────────────────────────────────────────────────────────────
 
+def _normalize_tool_calls(tool_calls: list[Any]) -> list[dict[str, Any]]:
+    """Normalize assistant tool_calls into Ollama's expected shape.
+
+    Ollama wants ``arguments`` as a JSON *object*, not a stringified-JSON like
+    OpenAI uses. Re-sending OpenAI-style tool calls (arguments as a string)
+    makes ``/api/chat`` return HTTP 400 ("Value looks like object…"). We also
+    drop ``id``/``type``/``index`` wrappers Ollama doesn't need.
+    """
+    out: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                args = {}
+        out.append({"function": {"name": fn.get("name"), "arguments": args or {}}})
+    return out
+
+
 def _normalize_ollama_messages(messages: list[LLMMessage]) -> list[dict[str, Any]]:
     """Ensure messages are in Ollama's expected flat-dict format."""
     result: list[dict[str, Any]] = []
     for msg in messages:
-        entry: dict[str, Any] = {"role": msg["role"], "content": msg.get("content", "")}
+        # Ollama rejects null content; coerce to "".
+        entry: dict[str, Any] = {"role": msg["role"], "content": msg.get("content") or ""}
         # Keep images if present (multimodal)
         if "images" in msg:
             entry["images"] = msg["images"]
-        # Keep tool_calls if present
-        if "tool_calls" in msg:
-            entry["tool_calls"] = msg["tool_calls"]
+        # Keep tool_calls if present (arguments must be objects, not strings)
+        if msg.get("tool_calls"):
+            entry["tool_calls"] = _normalize_tool_calls(msg["tool_calls"])
         result.append(entry)
     return result
 
 
-def _convert_tools_ollama(tools: list[dict[str, BaseTool]]) -> list[dict[str, Any]]:
-    """Convert CrewAI tool format to Ollama native tools format."""
+def _convert_tools_ollama(tools: list[Any]) -> list[dict[str, Any]]:
+    """Convert tool definitions to Ollama native tools format.
+
+    Accepts two shapes:
+    * CrewAI's ``{tool_name: BaseTool}`` mapping (legacy crew path), and
+    * already-OpenAI-formatted ``{"type": "function", "function": {...}}``
+      dicts, which CrewAI's native-tools executor passes through. Ollama's
+      tool format is OpenAI-compatible, so those are forwarded unchanged.
+    """
     converted: list[dict[str, Any]] = []
     for tool_dict in tools:
+        # Already in OpenAI/Ollama function format → forward as-is.
+        if isinstance(tool_dict, dict) and tool_dict.get("type") == "function" and "function" in tool_dict:
+            converted.append(tool_dict)
+            continue
         for tool_name, tool_obj in tool_dict.items():
             # Build JSON Schema from CrewAI BaseTool
             schema: dict[str, Any] = {

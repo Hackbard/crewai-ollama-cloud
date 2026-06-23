@@ -133,6 +133,7 @@ def _detect_family(name: str) -> str:
         "llama", "mistral", "gemma", "phi", "qwen", "deepseek",
         "falcon", "yi", "command-r", "dolphin", "orca", "vicuna",
         "wizard", "codellama", "starcoder", "neural-chat",
+        "gemini", "glm", "gpt", "kimi", "minimax", "nemotron", "qwen3",
     ]
     for f in families:
         if f in lower:

@@ -65,6 +65,26 @@ _OLLAMA_CONTEXT_SIZES: dict[str, str | int] = {
     "deepseek-r1:8b": 131072,
     "command-r": 131072,
     "phi3:mini": 4096,
+    "minimax-m3": 4096,
+    "nemotron-3-ultra": 4096,
+    "gemma4": 4096,
+    "qwen3.5": 4096,
+    "glm-5.1": 4096,
+    "minimax-m2.7": 4096,
+    "nemotron-3-super": 4096,
+    "glm-5": 4096,
+    "minimax-m2.5": 4096,
+    "qwen3-coder-next": 4096,
+    "glm-4.7": 4096,
+    "gemini-3-flash-preview": 4096,
+    "minimax-m2.1": 4096,
+    "kimi-k2.6": 4096,
+    "deepseek-v4-pro": 4096,
+    "deepseek-v4-flash": 4096,
+    "nemotron-3-nano": 4096,
+    "kimi-k2.5": 4096,
+    "gpt-oss": 4096,
+    "qwen3-vl": 4096,
 }
 _DEFAULT_CONTEXT_SIZE = 4096
 
@@ -203,9 +223,18 @@ class OllamaCloudProvider(BaseLLM):
         body["stream"] = False
 
         try:
+            import json as _json
+            body_json = _json.dumps(body, indent=2, ensure_ascii=False)
+            print(f"  [DEBUG] Request body ({len(body_json)} bytes):")
+            # Print first 2000 chars
+            print(body_json[:2000])
+            if len(body_json) > 2000:
+                print(f"  ... ({len(body_json) - 2000} more bytes)")
             resp = self._client.post("/api/chat", json=body)
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
+            print(f"  [DEBUG] Response status: {e.response.status_code}")
+            print(f"  [DEBUG] Response body: {e.response.text[:1000]}")
             if _is_context_overflow_msg(str(e)):
                 raise LLMContextLengthExceededError(str(e)) from e
             raise
@@ -412,6 +441,15 @@ class OllamaCloudProvider(BaseLLM):
             "model": self.model,
             "messages": _normalize_ollama_messages(messages),
         }
+        # DEBUG: show message structure
+        import json as _json
+        for i, m in enumerate(body["messages"]):
+            has_img = bool(m.get("images"))
+            content_len = len(str(m.get("content", "")))
+            print(f"  [DEBUG msg {i}] role={m['role']} content_len={content_len} has_images={has_img}")
+            if has_img:
+                for j, img in enumerate(m["images"]):
+                    print(f"    image[{j}]: {len(img)} chars")
 
         # Options sub-object
         options: dict[str, Any] = {}
@@ -464,7 +502,7 @@ class OllamaCloudProvider(BaseLLM):
         return _DEFAULT_CONTEXT_SIZE
 
     def supports_multimodal(self) -> bool:
-        vision_kw = ("vision", "multimodal", "llava", "bakllava", "minicpm", "cogvlm")
+        vision_kw = ("vision", "multimodal", "llava", "bakllava", "minicpm", "cogvlm", "kimi", "minimax")
         return any(kw in self.model.lower() for kw in vision_kw)
 
     def to_config_dict(self) -> dict[str, Any]:
